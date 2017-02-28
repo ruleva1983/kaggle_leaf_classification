@@ -173,22 +173,20 @@ class CNN_Classifier(object):
                 self.saver.save(session, save_path)
                 print ("Model saved in {}".format(save_path))
 
-    def score(self, X, y, restore_path=None):
-        with tf.Session(graph=self.graph) as session:
-            tf.initialize_all_variables().run()
-            if restore_path is not None:
-                self.saver.restore(session, restore_path)
-            predictions = tf.pack(
-                [tf.nn.softmax(self._model(X.reshape(-1, self.img_rows, self.img_cols, 1), 1.0)[i]) for i in
-                 range(self.max_nb_digits)])
-            predictions = predictions.eval(feed_dict={})
-            return self._accuracy(predictions, y), self._accuracy_full(predictions, y)
+    #def score(self, X, y, restore_path=None):
+    #    with tf.Session(graph=self.graph) as session:
+    #        tf.initialize_all_variables().run()
+    #        if restore_path is not None:
+    #            self.saver.restore(session, restore_path)
+     #       predictions = tf.nn.softmax(self._model(X.reshape(-1, self.img_rows, self.img_cols, 1), 1.0))
+     #       predictions = predictions.eval(feed_dict={})
+     #       return self._accuracy(predictions, y), self._accuracy_full(predictions, y)
 
-    def predict(self, X, restore_path=None):
-        with tf.Session(graph=self.graph) as session:
-            tf.initialize_all_variables().run()
-            if restore_path is not None:
-                self.saver.restore(session, restore_path)
-            predictions = tf.pack([tf.nn.softmax(self._model(X.reshape(-1, self.img_rows, self.img_cols, 1), 1.0)[i]) for i in range(self.max_nb_digits)])
-            predictions = predictions.eval(feed_dict={})
-            return np.argmax(predictions, 2).T
+    #def predict(self, X, restore_path=None):
+    #    with tf.Session(graph=self.graph) as session:
+    #        tf.initialize_all_variables().run()
+     #       if restore_path is not None:
+     #           self.saver.restore(session, restore_path)
+     ##       predictions = tf.pack([tf.nn.softmax(self._model(X.reshape(-1, self.img_rows, self.img_cols, 1), 1.0)[i]) for i in range(self.max_nb_digits)])
+     #       predictions = predictions.eval(feed_dict={})
+     #       return np.argmax(predictions, 2).T
