@@ -36,7 +36,7 @@ def augment_data_set(files, features, nb_augment, rot_prob, tr_prob, seed=0, IMA
             continue
         label = features.get_value(id_, "species")
 
-        image = cv2.imread(f, 0)
+        image = cv2.imread("../data/images/" + f, 0)
         image = resize_image_to_square(image, IMAGE_DIM)
         for n in range(nb_augment):
             augmented = deepcopy(image)

@@ -37,7 +37,8 @@ class CNN_Classifier(object):
         """
         self.x_cnn = tf.placeholder(tf.float32, shape=[None, self.img_rows, self.img_cols, self.nb_channels])
         self.x_fully = tf.placeholder(tf.float32, shape=[None, self.nb_features])
-        self.y = tf.placeholder(tf.int64, shape=[None, self.nb_classes])
+        #self.y = tf.placeholder(tf.int64, shape=[None, self.nb_classes])
+        self.y = tf.placeholder(tf.float32, shape=[None, self.nb_classes])
 
     def _initialize_variables(self):
         """
@@ -72,10 +73,11 @@ class CNN_Classifier(object):
         self.W_fcfinal = weight_variable([self.nb_hidden, self.nb_classes])
         self.b_fcfinal = bias_variable([self.nb_classes])
 
-    def _model(self, X_image, X_features=None, dropout=1.0):
+    def _model(self, X_image, X_features, dropout=1.0):
         """
         Builds the network structure.
         """
+        data = X_image
         def add_conv_layer(data, W, b):
             activation = tf.nn.conv2d(data, W, strides=[1, 1, 1, 1], padding='SAME') + b
             return tf.nn.local_response_normalization(tf.nn.relu(activation))
@@ -86,22 +88,22 @@ class CNN_Classifier(object):
         conv = 0
         for s in self.structure:
             if s["type"] == "conv":
-                X_image = add_conv_layer(X_image, self.W_conv[conv], self.b_conv[conv])
+                data = add_conv_layer(data, self.W_conv[conv], self.b_conv[conv])
                 conv += 1
             elif s["type"] == "pool":
-                X_image = add_pool_layer(X_image, s["params"])
+                data = add_pool_layer(data, s["params"])
 
-        im_shape = X_image.get_shape()
-        flatten = tf.reshape(X_image, [-1, int(im_shape[1]*im_shape[2]*im_shape[3])])
-        if X_features is not None:
-            flatten = tf.concat([flatten, X_features], 1)
+        im_shape = data.get_shape()
+        data = tf.reshape(data, [-1, int(im_shape[1]*im_shape[2]*im_shape[3])])
+        data = tf.concat(1, [data, X_features])
 
-        h_fc1 = tf.nn.relu(tf.matmul(flatten, self.W_fc) + self.b_fc)
-        h_fc1_drop = tf.nn.dropout(h_fc1, dropout)
-        return tf.matmul(h_fc1_drop, self.W_fcfinal) + self.b_fcfinal
+        data = tf.nn.relu(tf.matmul(data, self.W_fc) + self.b_fc)
+        data = tf.nn.dropout(data, dropout)
+        data = tf.matmul(data, self.W_fcfinal) + self.b_fcfinal
+        return data
 
     def _accuracy(self, predictions, actual):
-        return 100.0 * np.sum(np.argmax(predictions, 1) == np.argmax(actual))/predictions.shape[0]
+        return 100.0 * np.sum(np.argmax(predictions, 1) == np.argmax(actual, 1))/predictions.shape[0]
 
 
     def fit(self, X, y, batch_size = 128, nb_epochs = 100,
@@ -132,7 +134,7 @@ class CNN_Classifier(object):
 
         def prepare_dict(batch):
             dic = {self.x_cnn: batch[0].reshape(-1, self.img_rows, self.img_cols, self.nb_channels),
-                   self.x_fully: batch[1].reshape(-1, self.img_rows, self.img_cols, self.nb_channels),
+                   self.x_fully: batch[1],
                    self.y : batch[2]}
             return dic
 
@@ -151,7 +153,8 @@ class CNN_Classifier(object):
             self.saver = tf.train.Saver()
 
             logits = self._model(self.x_cnn, self.x_fully, p_dropout)
-            loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits, self.y))
+            loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits, self.y))
+
             optimizer = _optimizer_type(optimizer, loss)
             prediction = tf.nn.softmax(self._model(self.x_cnn, self.x_fully, 1.0))
 
@@ -164,7 +167,7 @@ class CNN_Classifier(object):
                 _, l, results = session.run([optimizer, loss, prediction], feed_dict=prepare_dict(batch))
                 if step % logging_info == 0:
                     print("Minibatch loss value at step {}: {:.2f}".format(step+1, l))
-                    minibatch_accuracy = self._accuracy(results, batch[1])
+                    minibatch_accuracy = self._accuracy(results, batch[2])
                     print("Minibatch accuracy: {:.1f}%".format(minibatch_accuracy))
                     #self.logger["training_error"].append(np.array([minibatch_accuracy_digits, minibatch_accuracy_full]))
 
