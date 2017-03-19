@@ -160,7 +160,6 @@ class MLP_Classifier(object):
      #       return np.argmax(predictions, 2).T
 
 
-
 class CNN_Classifier(object):
     """
     This class is used for the deep learning architecture. It defines a specific convolution neural network
@@ -181,7 +180,7 @@ class CNN_Classifier(object):
     :param nb_features: Number of features added at the first fully connected layer
     :type nb_feature: Integer
     """
-    def __init__(self, structure=None, nb_channels=1, nb_classes=10, img_rows=32, img_cols=32, nb_hidden=1024, nb_features=100):
+    def __init__(self, structure=None, nb_channels=1, nb_classes=10, img_rows=32, img_cols=32, nb_hidden=(1024,), nb_features=100):
         self.__dict__.update(locals())
         self.graph = tf.Graph()
         self.structure = structure
@@ -196,7 +195,6 @@ class CNN_Classifier(object):
         """
         self.x_cnn = tf.placeholder(tf.float32, shape=[None, self.img_rows, self.img_cols, self.nb_channels])
         self.x_fully = tf.placeholder(tf.float32, shape=[None, self.nb_features])
-        #self.y = tf.placeholder(tf.int64, shape=[None, self.nb_classes])
         self.y = tf.placeholder(tf.float32, shape=[None, self.nb_classes])
 
     def _initialize_variables(self):
@@ -214,22 +212,39 @@ class CNN_Classifier(object):
 
         self.W_conv = []
         self.b_conv = []
-        pool_prod = 1
+        self.W_dense = []
+        self.b_dense = []
+        self.W_fc = []
+        self.b_fc = []
+
+        #pool_prod = 1
+        n_neurons = 0
         for s in self.structure:
             if s["type"] == "conv":
                 params = s["params"]
                 self.W_conv.append(weight_variable([params["patch_x"], params["patch_y"],
                                                           params["channels"], params["depth"]]))
                 self.b_conv.append(bias_variable([params["depth"]]))
-                last_depth = params["depth"]
-            if s["type"] == "pool":
-                pool_prod *= s["params"]["side"]
+            #    last_depth = params["depth"]
+            #elif s["type"] == "pool":
+            #    pool_prod *= s["params"]["side"]
 
-        self.W_fc = weight_variable([(self.img_rows/pool_prod) * (self.img_cols/pool_prod) * last_depth +
-                                      self.nb_features, self.nb_hidden])
-        self.b_fc = bias_variable([self.nb_hidden])
+            elif s["type"] == "dense":
+                params = s["params"]
+                self.W_dense.append(weight_variable([params["n_input"],params["n_neurons"]]))
+                self.b_dense.append(bias_variable([params["n_neurons"]]))
+                n_neurons = params["n_neurons"]
 
-        self.W_fcfinal = weight_variable([self.nb_hidden, self.nb_classes])
+        #TODO At the moment works only if a dense layer is present at the end of the conv/pool architecture
+        #TODO before adding the external variables.
+
+        n_neurons += self.nb_features
+        for n in self.nb_hidden:
+            self.W_fc.append(weight_variable([n_neurons, n]))
+            self.b_fc.append(bias_variable([n]))
+            n_neurons = n
+
+        self.W_fcfinal = weight_variable([n_neurons, self.nb_classes])
         self.b_fcfinal = bias_variable([self.nb_classes])
 
     def _model(self, X_image, X_features, dropout=1.0):
@@ -244,22 +259,37 @@ class CNN_Classifier(object):
         def add_pool_layer(data, params):
             return tf.nn.max_pool(data, ksize=[1, params["side"], params["side"], 1],
                                   strides=[1, params["stride"], params["stride"], 1], padding='SAME')
+
+        def add_dense_layer(data, W, b):
+            shape = data.get_shape()
+            try:
+                data = tf.reshape(data, [-1, int(shape[1]*shape[2]*shape[3])])
+            except:
+                pass
+            return tf.nn.relu(tf.matmul(data, W) + b)
+
         conv = 0
+        dense = 0
         for s in self.structure:
             if s["type"] == "conv":
                 data = add_conv_layer(data, self.W_conv[conv], self.b_conv[conv])
                 conv += 1
             elif s["type"] == "pool":
                 data = add_pool_layer(data, s["params"])
+            elif s["type"] == "dense":
+                data = add_dense_layer(data, self.W_dense[dense], self.b_dense[dense])
+                dense += 1
 
-        im_shape = data.get_shape()
-        data = tf.reshape(data, [-1, int(im_shape[1]*im_shape[2]*im_shape[3])])
+        try:
+            im_shape = data.get_shape()
+            data = tf.reshape(data, [-1, int(im_shape[1]*im_shape[2]*im_shape[3])])
+        except:
+            pass
         data = tf.concat(1, [data, X_features])
-
-        data = tf.nn.relu(tf.matmul(data, self.W_fc) + self.b_fc)
-        data = tf.nn.dropout(data, dropout)
-        data = tf.matmul(data, self.W_fcfinal) + self.b_fcfinal
-        return data
+        for i in range(len(self.nb_hidden)):
+            data = tf.nn.relu(tf.matmul(data, self.W_fc[i]) + self.b_fc[i])
+            data = tf.nn.dropout(data, dropout)
+        return tf.matmul(data, self.W_fcfinal) + self.b_fcfinal
 
     def _accuracy(self, predictions, actual):
         return 100.0 * np.sum(np.argmax(predictions, 1) == np.argmax(actual, 1))/predictions.shape[0]
