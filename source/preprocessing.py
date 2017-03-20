@@ -82,9 +82,9 @@ def resize_image_to_square(image, side, interpolation=cv2.INTER_NEAREST):
     """
     shape = np.array(image.shape)
     if np.argmax(shape) == 0:
-        reshape_shape = (side * shape[1] / shape[0], side)
+        reshape_shape = (int(side * shape[1] / shape[0]), side)
     else:
-        reshape_shape = (side, side * shape[0] / shape[1])
+        reshape_shape = (side, int(side * shape[0] / shape[1]))
     resized = cv2.resize(image, reshape_shape, interpolation=interpolation)
 
     x = np.zeros((side, side))
